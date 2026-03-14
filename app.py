@@ -39,8 +39,11 @@ def fetch_SND_data():
     try:
         # LME伦锡行情：作为参考，提取最新收盘价
         df = ak.futures_foreign_hist(symbol="SND")
-        if not df.empty and '收盘价' in df.columns:
-            return float(df.iloc[-1]['收盘价'])
+        if not df.empty:
+            if 'close' in df.columns:
+                return float(df.iloc[-1]['close'])
+            elif '收盘价' in df.columns:
+                return float(df.iloc[-1]['收盘价'])
         return None
     except Exception as e:
         st.error(f"获取LME伦锡行情失败: {e}")
