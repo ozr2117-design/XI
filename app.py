@@ -59,6 +59,33 @@ def fetch_SND_data():
         st.error(f"获取LME伦锡行情失败: {e}")
         return None, None
 
+@st.cache_data(ttl=1800)
+def fetch_PB_data():
+    try:
+        # 获取市净率数据
+        df = ak.stock_zh_valuation_baidu(symbol="000960", indicator="市净率", period="近十年")
+        df['date'] = pd.to_datetime(df['date'])
+        # 截取过去5年的数据
+        five_years_ago = datetime.now() - pd.DateOffset(years=5)
+        df = df[df['date'] >= five_years_ago].copy()
+        return df
+    except Exception as e:
+        st.error(f"获取锡业股份历史市净率失败: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=1800)
+def fetch_inventory_data():
+    try:
+        # 获取沪锡库存数据，取近180天数据 (这里直接取最后180行，或者通过日期过滤皆可)
+        df = ak.futures_inventory_em(symbol="锡")
+        if not df.empty and '日期' in df.columns:
+            df['日期'] = pd.to_datetime(df['日期'])
+            return df.tail(180)
+        return pd.DataFrame()
+    except Exception:
+        # 优雅降级，静默失败由外部判断
+        return pd.DataFrame()
+
 def main():
     st.title("🛡️ 锡产业链量化监控与风控看板")
     
@@ -218,6 +245,82 @@ def main():
     )
     
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    
+    # ---------------- 新增模块一：绝对估值锚（PB 历史分位带） ----------------
+    st.markdown("---")
+    st.markdown("### ⚓ 绝对估值锚 (PB 历史分位带)")
+    
+    df_pb = fetch_PB_data()
+    if df_pb is not None and not df_pb.empty and 'value' in df_pb.columns:
+        # 计算过去 5 年的 PB 分位数
+        current_pb = df_pb.iloc[-1]['value']
+        pb_10 = df_pb['value'].quantile(0.10)
+        pb_90 = df_pb['value'].quantile(0.90)
+        
+        # 计算当前所在历史分位百分比
+        percentile = (df_pb['value'] < current_pb).mean() * 100
+        
+        # 智能总结
+        if percentile <= 10:
+            eval_text = "极度低估，处于左侧击球区底部。"
+        elif percentile >= 90:
+            eval_text = "极度高估，累积巨大回调风险。"
+        elif percentile <= 30:
+            eval_text = "偏向低估，具备安全边际。"
+        elif percentile >= 70:
+            eval_text = "偏向高估，需警惕估值杀。"
+        else:
+            eval_text = "绝对估值适中。"
+            
+        st.info(f"💡 当前 PB 为 **{current_pb:.2f}**，处于过去 5 年的 **{percentile:.1f}%** 分位，{eval_text}")
+        
+        # 绘制 PB 走势图
+        fig_pb = go.Figure()
+        fig_pb.add_trace(go.Scatter(x=df_pb['date'], y=df_pb['value'], 
+                                   line=dict(color='#8A2BE2', width=2), name='市净率(PB)', mode='lines'))
+        # 添加极度低估线和高估线
+        fig_pb.add_hline(y=pb_90, line_dash="dash", line_color="red", annotation_text=f"90% 高估线 ({pb_90:.2f})")
+        fig_pb.add_hline(y=pb_10, line_dash="dash", line_color="green", annotation_text=f"10% 低估线 ({pb_10:.2f})")
+        
+        fig_pb.update_layout(
+            height=350, margin=dict(l=10, r=10, t=20, b=10),
+            dragmode=False, hovermode="x unified", template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+        )
+        st.plotly_chart(fig_pb, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.warning("暂无法获取锡业股份历史市净率数据。")
+        
+    # ---------------- 新增模块二：底层供需照妖镜（交易所显性库存跟踪） ----------------
+    st.markdown("---")
+    st.markdown("### 🪞 底层供需照妖镜 (交易所显性库存跟踪)")
+    
+    df_inv = fetch_inventory_data()
+    if df_inv is not None and not df_inv.empty and '日期' in df_inv.columns and '库存' in df_inv.columns:
+        # 库存走势：判断首尾是在累库还是去库
+        first_inv = df_inv.iloc[0]['库存']
+        last_inv = df_inv.iloc[-1]['库存']
+        inv_diff = last_inv - first_inv
+        
+        if inv_diff > 0:
+            inv_status = f"🔴 **累库阶段** (近半年来增加 {inv_diff:.0f} 吨)"
+        else:
+            inv_status = f"🟢 **去库阶段** (近半年来减少 {abs(inv_diff):.0f} 吨)"
+            
+        st.markdown(f"**当前状态:** {inv_status}")
+        
+        # 绘制近半年库存柱状图
+        fig_inv = go.Figure()
+        fig_inv.add_trace(go.Bar(x=df_inv['日期'], y=df_inv['库存'], 
+                                 marker_color='#4682B4', name='显性库存'))
+        
+        fig_inv.update_layout(
+            height=300, margin=dict(l=10, r=10, t=20, b=10),
+            dragmode=False, hovermode="x unified", template="plotly_white"
+        )
+        st.plotly_chart(fig_inv, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.warning("暂无法获取最新库存数据，源接口维护中。")
 
 if __name__ == "__main__":
     main()
