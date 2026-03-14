@@ -37,17 +37,27 @@ def fetch_SN0_data():
 @st.cache_data(ttl=1800)
 def fetch_SND_data():
     try:
-        # LME伦锡行情：作为参考，提取最新收盘价
+        # LME伦锡行情：作为参考，提取最新收盘价和日内涨跌幅
         df = ak.futures_foreign_hist(symbol="SND")
         if not df.empty:
             if 'close' in df.columns:
-                return float(df.iloc[-1]['close'])
+                close_col = 'close'
             elif '收盘价' in df.columns:
-                return float(df.iloc[-1]['收盘价'])
-        return None
+                close_col = '收盘价'
+            else:
+                return None, None
+            
+            if len(df) >= 2:
+                latest = float(df.iloc[-1][close_col])
+                prev = float(df.iloc[-2][close_col])
+                pct = ((latest - prev) / prev) * 100
+                return latest, pct
+            elif len(df) == 1:
+                return float(df.iloc[-1][close_col]), 0.0
+        return None, None
     except Exception as e:
         st.error(f"获取LME伦锡行情失败: {e}")
-        return None
+        return None, None
 
 def main():
     st.title("🛡️ 锡产业链量化监控与风控看板")
@@ -55,7 +65,7 @@ def main():
     # 获取数据
     df_000960 = fetch_000960_data()
     df_SN0 = fetch_SN0_data()
-    snd_latest = fetch_SND_data()
+    snd_latest, snd_pct = fetch_SND_data()
     
     if df_000960.empty or df_SN0.empty:
         st.error("数据拉取失败或尚未准备好。")
@@ -115,8 +125,10 @@ def main():
     col1, col2, col3 = st.columns(3)
     col1.metric("锡业股份 (000960)", f"¥{latest_000960:.2f}", f"{pct_000960:.2f}%")
     col2.metric("沪锡主力 (SN0)", f"¥{latest_SN0:.0f}", f"{pct_SN0:.2f}%")
-    if snd_latest is not None:
-        col3.metric("LME伦锡 (SND)", f"${snd_latest:.2f}", "-") 
+    if snd_latest is not None and snd_pct is not None:
+        col3.metric("LME伦锡 (SND)", f"${snd_latest:.2f}", f"{snd_pct:.2f}%") 
+    elif snd_latest is not None:
+        col3.metric("LME伦锡 (SND)", f"${snd_latest:.2f}", "-")
     else:
         col3.metric("LME伦锡 (SND)", "N/A", "-")
 
