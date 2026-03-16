@@ -11,8 +11,8 @@ NEXT_REPORT_DATE = "2026-03-30"
 
 st.set_page_config(page_title="锡产业链量化监控与风控看板", layout="wide", initial_sidebar_state="collapsed")
 
-@st.cache_data(ttl=1800)
-def fetch_000960_data():
+@st.cache_data(ttl=1795)
+def fetch_000960_kline_data():
     try:
         # 使用腾讯稳定接口获取前复权日K线数据，绕过akshare针对Streamlit Cloud的请求封锁
         url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz000960,day,,,150,qfq"
@@ -105,7 +105,7 @@ def main():
     st.title("🛡️ 锡产业链量化监控与风控看板")
     
     # 获取数据
-    df_000960 = fetch_000960_data()
+    df_000960 = fetch_000960_kline_data()
     df_SN0 = fetch_SN0_data()
     snd_latest, snd_pct = fetch_SND_data()
     
