@@ -13,9 +13,9 @@ st.set_page_config(page_title="锡产业链量化监控与风控看板", layout=
 @st.cache_data(ttl=1800)
 def fetch_000960_data():
     try:
-        # A股历史与最新行情：提取收盘价和日期
-        df = ak.stock_zh_a_hist(symbol="000960", period="daily")
-        df = df[['日期', '收盘']].rename(columns={'日期': 'Date', '收盘': 'Close_000960'})
+        # A股历史与最新行情：提取收盘价和日期（使用新浪接口）
+        df = ak.stock_zh_a_daily(symbol="sz000960", adjust="qfq")
+        df = df[['date', 'close']].rename(columns={'date': 'Date', 'close': 'Close_000960'})
         df['Date'] = pd.to_datetime(df['Date'])
         return df.tail(150)
     except Exception as e:
