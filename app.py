@@ -4,6 +4,7 @@ import akshare as ak
 import plotly.graph_objects as go
 from datetime import datetime
 from plotly.subplots import make_subplots
+import requests
 
 # 全局风控配置
 NEXT_REPORT_DATE = "2026-03-30"
@@ -13,10 +14,18 @@ st.set_page_config(page_title="锡产业链量化监控与风控看板", layout=
 @st.cache_data(ttl=1800)
 def fetch_000960_data():
     try:
-        # A股历史与最新行情：提取收盘价和日期（使用新浪接口）
-        df = ak.stock_zh_a_daily(symbol="sz000960", adjust="qfq")
-        df = df[['date', 'close']].rename(columns={'date': 'Date', 'close': 'Close_000960'})
+        # 使用腾讯稳定接口获取前复权日K线数据，绕过akshare针对Streamlit Cloud的请求封锁
+        url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz000960,day,,,150,qfq"
+        res = requests.get(url, timeout=10)
+        data = res.json()
+        kline_data = data['data']['sz000960']['qfqday']
+        
+        # 腾讯接口返回格式：[日期, 开盘, 收盘, 最高, 最低, 成交量]
+        df = pd.DataFrame(kline_data, columns=['Date', 'Open', 'Close', 'High', 'Low', 'Volume'])
+        df = df[['Date', 'Close']].rename(columns={'Close': 'Close_000960'})
         df['Date'] = pd.to_datetime(df['Date'])
+        df['Close_000960'] = df['Close_000960'].astype(float)
+        
         return df.tail(150)
     except Exception as e:
         st.error(f"获取锡业股份历史行情失败: {e}")
