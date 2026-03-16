@@ -24,8 +24,10 @@ def fetch_000960_data():
         data = res.json()
         kline_data = data['data']['sz000960']['qfqday']
         
-        # 腾讯接口返回格式：[日期, 开盘, 收盘, 最高, 最低, 成交量]
-        df = pd.DataFrame(kline_data, columns=['Date', 'Open', 'Close', 'High', 'Low', 'Volume'])
+        # 腾讯接口返回格式混杂：历史数据6列 [日期, 开盘, 收盘, 最高, 最低, 成交量]，最新一天可能7列
+        # 统一截取前6列，避免 DataFrame 构造报错 (6 columns passed, passed data had 7 columns)
+        kline_data_cleaned = [row[:6] for row in kline_data]
+        df = pd.DataFrame(kline_data_cleaned, columns=['Date', 'Open', 'Close', 'High', 'Low', 'Volume'])
         df = df[['Date', 'Close']].rename(columns={'Close': 'Close_000960'})
         df['Date'] = pd.to_datetime(df['Date'])
         df['Close_000960'] = df['Close_000960'].astype(float)
