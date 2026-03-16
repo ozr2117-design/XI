@@ -16,7 +16,11 @@ def fetch_000960_data():
     try:
         # 使用腾讯稳定接口获取前复权日K线数据，绕过akshare针对Streamlit Cloud的请求封锁
         url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz000960,day,,,150,qfq"
-        res = requests.get(url, timeout=10)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*"
+        }
+        res = requests.get(url, headers=headers, timeout=10)
         data = res.json()
         kline_data = data['data']['sz000960']['qfqday']
         
