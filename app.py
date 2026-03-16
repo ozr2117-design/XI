@@ -115,9 +115,13 @@ def main():
         
     # 核心算法模块
     try:
-        # 数据对齐：将锡业股份和沪锡历史数据转换DataFrame，设定日期为 Index，内连接合并确保交易日期对齐
-        df_merged = pd.merge(df_000960, df_SN0, on='Date', how='inner').dropna()
+        # 数据对齐：由于沪锡期货的日线数据在盘中可能比 A股 慢，改用 outer 合并并向前填充（ffill），避免合并时丢掉今天最新的 A股数据
+        df_merged = pd.merge(df_000960, df_SN0, on='Date', how='outer').sort_values('Date')
         df_merged.set_index('Date', inplace=True)
+        # 向前填充缺失值（例如今天SN0还没有，就用昨天的SN0）
+        df_merged.ffill(inplace=True)
+        # 丢掉最早的NaN
+        df_merged.dropna(inplace=True)
         
         # 趋势引擎（MA60）：计算锡业股份收盘价的 60 日移动平均线
         df_merged['MA60'] = df_merged['Close_000960'].rolling(window=60).mean()
@@ -134,7 +138,7 @@ def main():
         df_merged['Z_Score'] = (df_merged['Ratio'] - df_merged['Rolling_Mean']) / df_merged['Rolling_Std']
         
         # 删除由于滚动计算产生的 NaN 缺失值
-        df_merged.dropna(inplace=True)
+        df_merged.dropna(subset=['Z_Score', 'MA60'], inplace=True)
     except Exception as e:
         st.error(f"数据处理引擎异常: {e}")
         st.stop()
